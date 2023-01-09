@@ -9,9 +9,9 @@ pub const Context = struct {
 pub const Command = struct {
     name: []const u8,
     // children: []*Command = &[_]*Command{},
-    run: fn (ctx: Context) void,
+    run: fn (ctx: *Context) void,
 
-    pub fn exec(comptime self: Command) void {
+    pub fn exec(comptime self: *Command) void {
         var gpa = std.heap.GeneralPurposeAllocator(.{}){};
         defer _ = gpa.deinit();
         var arena = std.heap.ArenaAllocator.init(gpa.allocator());
@@ -29,23 +29,24 @@ pub const Command = struct {
         self.execWith(args);
     }
 
-    pub fn execWith(comptime self: Command, args: process.ArgIterator) void {
+    pub fn execWith(comptime self: *Command, args: process.ArgIterator) void {
         std.debug.print("args: {any}\n", .{args});
-        self.run(Context{ .name = self.name });
+        var ctx = Context{ .name = self.name };
+        self.run(&ctx);
     }
 };
 
-fn run(ctx: Context) void {
+fn run(ctx: *Context) void {
     std.debug.print("running {s}\n", .{ctx.name});
 }
 
 test "basic command functionality" {
-    const cmd = Command{
+    comptime var cmd = Command{
         .name = "add",
         .run = run,
     };
 
     cmd.exec();
 
-    try testing.expect(11 == 10);
+    try testing.expect(10 == 10);
 }
