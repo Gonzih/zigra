@@ -52,6 +52,10 @@ pub fn ArgParser(comptime mock: bool) type {
             };
         }
 
+        pub fn getArg(self: *Self, k: []const u8) ?[]const u8 {
+            return self.map.get(k);
+        }
+
         pub fn deinit(self: *Self) void {
             self.args.deinit();
             self.map.deinit();

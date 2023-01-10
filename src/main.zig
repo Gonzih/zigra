@@ -4,43 +4,75 @@ const process = std.process;
 const builtin = @import("builtin");
 const args = @import("args.zig");
 
-pub const Context = struct {
-    cmd: []const u8,
-    allocator: std.mem.Allocator,
-};
+pub fn Binding(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        ptr: *T = undefined,
+
+        pub fn set(self: *Self, value: []const u8) !void {
+            switch (@typeInfo(T)) {
+                .Bool => {
+                    self.ptr.* = value != "false";
+                },
+                .Int => {
+                    const int_value = try std.fmt.parseInt(T, value, 10);
+                    self.ptr.* = int_value;
+                },
+                .Float => {
+                    const float_value = try std.fmt.parseFloat(T, value, 10);
+                    self.ptr.* = float_value;
+                },
+                else => @compileError("Unsupported type"),
+            }
+        }
+    };
+}
+
+fn ContextBase(comptime Parser: type) type {
+    return struct {
+        pub const Self = @This();
+
+        cmd: []const u8,
+        allocator: std.mem.Allocator,
+        parser: *Parser,
+
+        pub fn bind(self: *Self, comptime T: type, ptr: *T, k: []const u8) !void {
+            const v = self.parser.getArg(k) orelse return;
+            var binding = Binding(T){ .ptr = ptr };
+            try binding.set(v);
+        }
+    };
+}
 
 fn CommandBase(comptime Parser: type, comptime Runner: type) type {
     return struct {
         pub const Self = @This();
+        pub const InnerContext = ContextBase(Parser);
 
         parser: Parser,
         runner: Runner,
         cmd: []const u8,
         allocator: std.mem.Allocator,
 
-        pub fn init(allocator: std.mem.Allocator, cmd: []const u8) Self {
-            var ctx = Context{
-                .cmd = cmd,
-                .allocator = allocator,
-            };
-
-            return Self{
-                .parser = Parser.parse(allocator, ""),
-                .runner = Runner.init(ctx),
-                .cmd = cmd,
-                .allocator = allocator,
-            };
+        pub fn init(allocator: std.mem.Allocator, cmd: []const u8) !Self {
+            return initMock(allocator, cmd, "");
         }
 
         fn initMock(allocator: std.mem.Allocator, cmd: []const u8, mock_args: []const u8) !Self {
-            var ctx = Context{
+            var parser = try Parser.parse(allocator, mock_args);
+
+            var ctx = InnerContext{
                 .cmd = cmd,
                 .allocator = allocator,
+                .parser = &parser,
             };
 
+            const runner = try Runner.init(ctx);
+
             return Self{
-                .parser = try Parser.parse(allocator, mock_args),
-                .runner = Runner.init(ctx),
+                .parser = parser,
+                .runner = runner,
                 .cmd = cmd,
                 .allocator = allocator,
             };
@@ -48,9 +80,10 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
 
         pub fn exec(self: *Self) !void {
             std.debug.print("args: {any}\n", .{self.parser});
-            var ctx = Context{
+            var ctx = InnerContext{
                 .cmd = self.cmd,
                 .allocator = self.allocator,
+                .parser = &self.parser,
             };
 
             try self.runner.run(ctx);
@@ -63,10 +96,12 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
     };
 }
 
+pub const Context = ContextBase(args.ArgParser(false));
 pub fn Command(comptime Runner: type) type {
     return CommandBase(args.ArgParser(false), Runner);
 }
 
+const ContextT = ContextBase(args.ArgParser(true));
 fn CommandT(comptime Runner: type) type {
     return CommandBase(args.ArgParser(true), Runner);
 }
@@ -77,12 +112,12 @@ test "simple test" {
 
         pub const Self = @This();
 
-        pub fn init(ctx: Context) Self {
+        pub fn init(ctx: ContextT) !Self {
             _ = ctx;
             return Self{};
         }
 
-        pub fn run(self: *Self, ctx: Context) !void {
+        pub fn run(self: *Self, ctx: ContextT) !void {
             _ = ctx;
             self.v = 10;
             return;
@@ -106,14 +141,16 @@ test "test key binding" {
 
         pub const Self = @This();
 
-        pub fn init(ctx: Context) Self {
-            _ = ctx;
-            return Self{};
+        pub fn init(ctx: ContextT) !Self {
+            var self = Self{};
+            try ctx.bind(usize, &self.v, "v");
+
+            return self;
         }
 
-        pub fn run(self: *Self, ctx: Context) !void {
+        pub fn run(self: *Self, ctx: ContextT) !void {
             _ = ctx;
-            self.v = 10;
+            _ = self;
             return;
         }
 
@@ -122,9 +159,9 @@ test "test key binding" {
         }
     };
 
-    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=10");
+    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=20");
     cmd.exec() catch unreachable;
     defer cmd.deinit();
 
-    try testing.expect(cmd.runner.v == 10);
+    try testing.expect(cmd.runner.v == 20);
 }
