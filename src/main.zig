@@ -26,6 +26,11 @@ pub fn Binding(comptime T: type) type {
                         self.ptr.* = v;
                     }
                 },
+                .Pointer => |info| {
+                    if (info.child == u8) {
+                        self.ptr.* = value;
+                    } else @compileError("Unsupported slice type");
+                },
                 else => @compileError("Unsupported type"),
             }
         }
@@ -158,6 +163,7 @@ test "test key binding" {
         v: usize = 0,
         a: usize = 0,
         en: Enum = .A,
+        str: []const u8 = "",
 
         pub const Self = @This();
 
@@ -166,6 +172,7 @@ test "test key binding" {
             try ctx.bind(usize, &self.v, "verbose", "v");
             try ctx.bind(usize, &self.a, "another", "a");
             try ctx.bind(Enum, &self.en, "enum", "e");
+            try ctx.bind([]const u8, &self.str, "string", "s");
 
             return self;
         }
@@ -182,11 +189,12 @@ test "test key binding" {
         }
     };
 
-    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=20 --another=30 --enum=B");
+    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=20 --another=30 --enum=B --string=mystring");
     cmd.exec() catch unreachable;
     defer cmd.deinit();
 
     try testing.expect(cmd.runner.v == 20);
     try testing.expect(cmd.runner.a == 30);
     try testing.expect(cmd.runner.en == Enum.B);
+    try testing.expect(std.mem.eql(u8, cmd.runner.str, "mystring"));
 }
