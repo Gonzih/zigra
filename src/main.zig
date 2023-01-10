@@ -11,16 +11,12 @@ pub fn Binding(comptime T: type) type {
         ptr: *T = undefined,
 
         pub fn set(self: *Self, value: []const u8) !void {
-            std.debug.print("value {s}\n", .{value});
-            std.debug.print("type {any}\n", .{@typeInfo(T)});
-
             switch (@typeInfo(T)) {
                 .Bool => {
                     self.ptr.* = value != "false";
                 },
                 .Int => {
                     self.ptr.* = try std.fmt.parseInt(T, value, 10);
-                    std.debug.print("set to {d}\n", .{self.ptr.*});
                 },
                 .Float => {
                     self.ptr.* = try std.fmt.parseFloat(T, value, 10);
