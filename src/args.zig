@@ -17,6 +17,7 @@ pub fn ArgParser(comptime mock: bool) type {
         args: ArgsList,
 
         pub fn parse(allocator: std.mem.Allocator, command: []const u8) !Self {
+            std.debug.print("=> Command: \"{s}\"\n", .{command});
             var iter = switch (mock) {
                 true => try InnerType.init(allocator, command),
                 false => try InnerType.initWithAllocator(allocator),
@@ -27,6 +28,7 @@ pub fn ArgParser(comptime mock: bool) type {
             var list = ArgsList.init(allocator);
 
             while (iter.next()) |arg| {
+                std.debug.print("=> Arg: \"{s}\"\n", .{arg});
                 try list.append(arg);
             }
 
@@ -38,15 +40,37 @@ pub fn ArgParser(comptime mock: bool) type {
     };
 }
 
+test "test real args" {
+    std.debug.print("\n", .{});
+    const allocator = std.testing.allocator;
+    var parser = try ArgParser(false).parse(allocator, "binary-path test");
+    try testing.expect(parser.args.items.len == 1);
+}
+
+test "test mock args len" {
+    std.debug.print("\n", .{});
+    const allocator = std.testing.allocator;
+    var parser = try ArgParser(true).parse(allocator, "binary-path test");
+    try testing.expect(parser.args.items.len == 2);
+}
+
 test "ArgParser" {
+    std.debug.print("\n", .{});
     const allocator = std.testing.allocator;
     var parser = try ArgParser(true).parse(allocator, "binary-path test");
 
     for (parser.args.items) |arg| {
-        std.debug.print("\n=> Argument: {s}\n", .{arg});
+        std.debug.print("=> Argument: \"{s}\"\n", .{arg});
     }
 
-    var el = parser.args.pop();
-    std.debug.print("\n=> EL: {s}\n", .{el});
-    try testing.expect(std.mem.eql(u8, el, "test"));
+    var asserts = [_][]const u8{
+        "binary-path",
+        "test",
+    };
+
+    for (parser.args.items) |arg, idx| {
+        const assert = asserts[idx];
+        std.debug.print("=> Comparing: {s} == {s}\n", .{ arg, assert });
+        try testing.expect(std.mem.eql(u8, arg, assert));
+    }
 }
