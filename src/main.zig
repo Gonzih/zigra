@@ -276,11 +276,14 @@ test "subcommand testing" {
     defer cmd.deinit();
     var twoCmd = try CommandT(Runner).initMock(std.testing.allocator, "two", cli_args);
     var threeCmd = try CommandT(Runner).initMock(std.testing.allocator, "three", cli_args);
+    var fourCmd = try CommandT(Runner).initMock(std.testing.allocator, "three", cli_args);
     try cmd.addSubcommand(&twoCmd);
     try cmd.addSubcommand(&threeCmd);
+    try threeCmd.addSubcommand(&fourCmd);
     cmd.exec() catch unreachable;
 
     try testing.expect(cmd.runner.v == 0);
     try testing.expect(twoCmd.runner.v == 10);
     try testing.expect(threeCmd.runner.v == 0);
+    try testing.expect(fourCmd.runner.v == 0);
 }
