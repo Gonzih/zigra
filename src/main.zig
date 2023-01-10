@@ -73,7 +73,7 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
         cmd: []const u8,
         allocator: std.mem.Allocator,
         children: []*Self,
-        root: bool = true,
+        level: usize = 0,
 
         pub fn init(allocator: std.mem.Allocator, cmd: []const u8) !Self {
             return initMock(allocator, cmd, "");
@@ -99,32 +99,40 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
             };
         }
 
-        pub fn exec(self: *Self) !void {
-            const currentCommand = self.parser.next();
-            const isCurrent = std.mem.eql(u8, currentCommand, self.cmd);
+        fn next(self: *Self) []const u8 {
+            for (self.children) |child| {
+                _ = child.next();
+            }
 
-            std.debug.print("exec: {s} current {s} isCurrent: {} root: {} children.len: {}\n", .{
+            return self.parser.next();
+        }
+
+        pub fn exec(self: *Self) !void {
+            const current_command = self.next();
+            const is_current = std.mem.eql(u8, current_command, self.cmd);
+            const arg_len = self.parser.args.items.len;
+
+            std.debug.print("exec: {s} current {s} is_current: {} level: {} children.len: {}\n", .{
                 self.cmd,
-                currentCommand,
-                isCurrent,
-                self.root,
+                current_command,
+                is_current,
+                self.level,
                 self.children.len,
             });
 
-            if (self.parser.args.items.len == 1 and self.root) {
+            if (arg_len == 1 and self.level == 0) {
                 try self._exec();
                 return;
             }
 
-            if (self.parser.args.items.len > 1 and self.root) {
+            if (arg_len > 1 and arg_len > self.level + 1 and is_current) {
                 for (self.children) |child| {
-                    _ = child.parser.next();
                     try child.exec();
                 }
                 return;
             }
 
-            if (self.parser.args.items.len > 1 and !self.root and isCurrent) {
+            if (arg_len > 1 and arg_len == self.level + 1 and is_current) {
                 try self._exec();
                 return;
             }
@@ -141,7 +149,7 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
         }
 
         pub fn addSubcommand(self: *Self, sub: *Self) !void {
-            sub.root = false;
+            sub.level = self.level + 1;
 
             self.children = try self.allocator.realloc(self.children, self.children.len + 1);
             self.children[self.children.len - 1] = sub;
@@ -271,19 +279,112 @@ test "subcommand testing" {
         }
     };
 
+    const alloc = std.testing.allocator;
     const cli_args = "one two --arg=1 --beta=2";
-    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", cli_args);
+
+    var cmd = try CommandT(Runner).initMock(alloc, "one", cli_args);
     defer cmd.deinit();
-    var twoCmd = try CommandT(Runner).initMock(std.testing.allocator, "two", cli_args);
-    var threeCmd = try CommandT(Runner).initMock(std.testing.allocator, "three", cli_args);
-    var fourCmd = try CommandT(Runner).initMock(std.testing.allocator, "three", cli_args);
+
+    var twoCmd = try CommandT(Runner).initMock(alloc, "two", cli_args);
+    var threeCmd = try CommandT(Runner).initMock(alloc, "three", cli_args);
+    var fourCmd = try CommandT(Runner).initMock(alloc, "four", cli_args);
+
     try cmd.addSubcommand(&twoCmd);
     try cmd.addSubcommand(&threeCmd);
     try threeCmd.addSubcommand(&fourCmd);
+
     cmd.exec() catch unreachable;
 
     try testing.expect(cmd.runner.v == 0);
     try testing.expect(twoCmd.runner.v == 10);
+    try testing.expect(threeCmd.runner.v == 0);
+    try testing.expect(fourCmd.runner.v == 0);
+}
+
+test "subcommand testing 3 levels nesting" {
+    const Runner = struct {
+        v: usize = 0,
+
+        pub const Self = @This();
+
+        pub fn init(ctx: *ContextT) !Self {
+            _ = ctx;
+            return Self{};
+        }
+
+        pub fn run(self: *Self, ctx: *ContextT) !void {
+            _ = ctx;
+            self.v = 69;
+            return;
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.v = 0;
+        }
+    };
+
+    const alloc = std.testing.allocator;
+    const cli_args = "one two four --arg=1 --beta=2";
+
+    var cmd = try CommandT(Runner).initMock(alloc, "one", cli_args);
+    defer cmd.deinit();
+
+    var twoCmd = try CommandT(Runner).initMock(alloc, "two", cli_args);
+    var threeCmd = try CommandT(Runner).initMock(alloc, "three", cli_args);
+    var fourCmd = try CommandT(Runner).initMock(alloc, "four", cli_args);
+
+    try cmd.addSubcommand(&twoCmd);
+    try cmd.addSubcommand(&threeCmd);
+    try twoCmd.addSubcommand(&fourCmd);
+
+    cmd.exec() catch unreachable;
+
+    try testing.expect(cmd.runner.v == 0);
+    try testing.expect(twoCmd.runner.v == 0);
+    try testing.expect(threeCmd.runner.v == 0);
+    try testing.expect(fourCmd.runner.v == 69);
+}
+
+test "subcommand testing 3 levels no match" {
+    const Runner = struct {
+        v: usize = 0,
+
+        pub const Self = @This();
+
+        pub fn init(ctx: *ContextT) !Self {
+            _ = ctx;
+            return Self{};
+        }
+
+        pub fn run(self: *Self, ctx: *ContextT) !void {
+            _ = ctx;
+            self.v = 69;
+            return;
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.v = 0;
+        }
+    };
+
+    const alloc = std.testing.allocator;
+    const cli_args = "one three four --arg=1 --beta=2";
+
+    var cmd = try CommandT(Runner).initMock(alloc, "one", cli_args);
+    defer cmd.deinit();
+
+    var twoCmd = try CommandT(Runner).initMock(alloc, "two", cli_args);
+    var threeCmd = try CommandT(Runner).initMock(alloc, "three", cli_args);
+    var fourCmd = try CommandT(Runner).initMock(alloc, "four", cli_args);
+
+    try cmd.addSubcommand(&twoCmd);
+    try cmd.addSubcommand(&threeCmd);
+    try twoCmd.addSubcommand(&fourCmd);
+
+    cmd.exec() catch unreachable;
+
+    try testing.expect(cmd.runner.v == 0);
+    try testing.expect(twoCmd.runner.v == 0);
     try testing.expect(threeCmd.runner.v == 0);
     try testing.expect(fourCmd.runner.v == 0);
 }
