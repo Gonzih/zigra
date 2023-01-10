@@ -68,10 +68,11 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
         pub const Self = @This();
         pub const InnerContext = ContextBase(Parser);
 
-        parser: Parser,
-        runner: Runner,
+        parser: *Parser,
+        runner: *Runner,
         cmd: []const u8,
         allocator: std.mem.Allocator,
+        children: []*Self,
 
         pub fn init(allocator: std.mem.Allocator, cmd: []const u8) !Self {
             return initMock(allocator, cmd, "");
@@ -89,10 +90,11 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
             var runner = try Runner.init(&ctx);
 
             return Self{
-                .parser = parser,
-                .runner = runner,
+                .parser = &parser,
+                .runner = &runner,
                 .cmd = cmd,
                 .allocator = allocator,
+                .children = [_]Self{},
             };
         }
 
@@ -100,15 +102,21 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
             var ctx = InnerContext{
                 .cmd = self.cmd,
                 .allocator = self.allocator,
-                .parser = &self.parser,
+                .parser = self.parser,
             };
 
             try self.runner.run(&ctx);
         }
 
+        pub fn addSubcommand(self: *Self, sub: *Self) !void {
+            self.children = try self.allocator.realloc(self.children, self.children.len + 1);
+            self.children[self.children.len - 1] = sub;
+        }
+
         pub fn deinit(self: *Self) void {
             self.parser.deinit();
             self.runner.deinit();
+            self.allocator.free(self.children);
         }
     };
 }
