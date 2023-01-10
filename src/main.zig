@@ -6,87 +6,81 @@ const args = @import("args.zig");
 
 pub const Context = struct {
     cmd: []const u8,
+    allocator: std.mem.Allocator,
 };
 
-fn CommandBase(comptime Parser: type) type {
+fn CommandBase(comptime Parser: type, comptime Runner: type) type {
     return struct {
+        pub const Self = @This();
+
         parser: Parser,
+        runner: Runner,
         cmd: []const u8,
-        children: []*CommandBase(Parser) = &[_]*CommandBase(Parser){},
-        run: fn (ctx: *Context) void,
 
-        pub fn exec(comptime self: *CommandBase(Parser), allocator: std.mem.Allocator) void {
-            // defer iter.deinit();
+        pub fn init(allocator: std.mem.Allocator, cmd: []const u8) Self {
+            return Self{
+                .parser = Parser.parse(allocator, ""),
+                .runner = Runner.init(),
+                .cmd = cmd,
+            };
+        }
 
-            _ = allocator;
+        fn initMock(allocator: std.mem.Allocator, cmd: []const u8, mock_args: []const u8) !Self {
+            return Self{
+                .parser = try Parser.parse(allocator, mock_args),
+                .runner = Runner.init(),
+                .cmd = cmd,
+            };
+        }
+
+        pub fn exec(self: *Self, allocator: std.mem.Allocator) !void {
             std.debug.print("args: {any}\n", .{self.parser});
+            var ctx = Context{
+                .cmd = self.cmd,
+                .allocator = allocator,
+            };
 
-            // skip my own exe name
-            // _ = iter.skip();
+            try self.runner.run(ctx);
+        }
 
-            // self.execWith(iter);
+        pub fn deinit(self: *Self) void {
+            self.parser.deinit();
+            self.runner.deinit();
         }
     };
 }
 
-pub const Command = CommandBase(args.ArgParser(false));
-
-var setThis: usize = 0;
-
-fn run(ctx: *Context) void {
-    setThis = 10;
-    std.debug.print("running {s}\n", .{ctx.name});
+pub fn Command(comptime Runner: type) type {
+    return CommandBase(args.ArgParser(false), Runner);
 }
 
-// test "simple one" {
-//     const CommandT = CommandBase(false);
+fn CommandT(comptime Runner: type) type {
+    return CommandBase(args.ArgParser(true), Runner);
+}
 
-//     setThis = 0;
+const RunnerTone = struct {
+    v: usize = 0,
 
-//     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-//     // defer arena.deinit();
-//     const a = arena.allocator();
+    pub fn init() RunnerTone {
+        return RunnerTone{};
+    }
 
-//     comptime var cmd = CommandT{
-//         .cmd = "add",
-//         .run = run,
-//     };
+    pub fn run(self: *RunnerTone, ctx: Context) !void {
+        _ = ctx;
+        self.v = 10;
+        return;
+    }
 
-//     // defer cmd.deinit();
+    pub fn deinit(self: *RunnerTone) void {
+        self.v = 0;
+    }
+};
 
-//     cmd.exec(a);
+test "test one" {
+    const CommandTone = CommandT(RunnerTone);
+    var cmd = try CommandTone.initMock(std.testing.allocator, "one", "one -v=10");
+    cmd.exec(std.testing.allocator) catch unreachable;
+    defer cmd.deinit();
 
-//     try testing.expect(setThis == 10);
-// }
-
-// test "mocked out command line" {
-//     const CommandT = CommandBase(false);
-
-//     setThis = 0;
-
-//     const a = std.testing.allocator;
-
-//     // var input_cmd_line = "program add --foo bar --baz 10";
-//     // var it = try process.ArgIteratorGeneral(.{}).init(a, input_cmd_line);
-//     var it = try process.ArgIterator.initWithAllocator(a);
-//     std.debug.print("it: {any}\n", .{it});
-
-//     comptime var cmd = CommandT{
-//         .cmd = "add",
-//         .run = run,
-//     };
-
-//     // defer cmd.deinit();
-
-//     cmd.execWith(it);
-
-//     try testing.expect(setThis == 10);
-// }
-
-test "ekek" {
-    const ParserT = args.ArgParser(true);
-    const CommandT = CommandBase(ParserT);
-    _ = CommandT;
-
-    try testing.expect('2' == '2');
+    try testing.expect(cmd.runner.v == 10);
 }
