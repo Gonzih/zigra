@@ -68,7 +68,7 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
                 .parser = &parser,
             };
 
-            const runner = try Runner.init(ctx);
+            var runner = try Runner.init(ctx);
 
             return Self{
                 .parser = parser,
@@ -79,7 +79,6 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
         }
 
         pub fn exec(self: *Self) !void {
-            std.debug.print("args: {any}\n", .{self.parser});
             var ctx = InnerContext{
                 .cmd = self.cmd,
                 .allocator = self.allocator,
@@ -159,7 +158,7 @@ test "test key binding" {
         }
     };
 
-    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=20");
+    const cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=20");
     cmd.exec() catch unreachable;
     defer cmd.deinit();
 
