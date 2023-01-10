@@ -18,17 +18,27 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
         cmd: []const u8,
 
         pub fn init(allocator: std.mem.Allocator, cmd: []const u8) Self {
+            var ctx = Context{
+                .cmd = cmd,
+                .allocator = allocator,
+            };
+
             return Self{
                 .parser = Parser.parse(allocator, ""),
-                .runner = Runner.init(),
+                .runner = Runner.init(ctx),
                 .cmd = cmd,
             };
         }
 
         fn initMock(allocator: std.mem.Allocator, cmd: []const u8, mock_args: []const u8) !Self {
+            var ctx = Context{
+                .cmd = cmd,
+                .allocator = allocator,
+            };
+
             return Self{
                 .parser = try Parser.parse(allocator, mock_args),
-                .runner = Runner.init(),
+                .runner = Runner.init(ctx),
                 .cmd = cmd,
             };
         }
@@ -61,7 +71,8 @@ fn CommandT(comptime Runner: type) type {
 const RunnerTone = struct {
     v: usize = 0,
 
-    pub fn init() RunnerTone {
+    pub fn init(ctx: Context) RunnerTone {
+        _ = ctx;
         return RunnerTone{};
     }
 
