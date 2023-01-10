@@ -111,6 +111,7 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
 
         pub fn addSubcommand(self: *Self, sub: *Self) !void {
             sub.root = false;
+            sub.parser = self.parser;
             self.children = try self.allocator.realloc(self.children, self.children.len + 1);
             self.children[self.children.len - 1] = sub;
         }
