@@ -11,17 +11,19 @@ pub fn Binding(comptime T: type) type {
         ptr: *T = undefined,
 
         pub fn set(self: *Self, value: []const u8) !void {
+            std.debug.print("value {s}\n", .{value});
+            std.debug.print("type {any}\n", .{@typeInfo(T)});
+
             switch (@typeInfo(T)) {
                 .Bool => {
                     self.ptr.* = value != "false";
                 },
                 .Int => {
-                    const int_value = try std.fmt.parseInt(T, value, 10);
-                    self.ptr.* = int_value;
+                    self.ptr.* = try std.fmt.parseInt(T, value, 10);
+                    std.debug.print("set to {d}\n", .{self.ptr.*});
                 },
                 .Float => {
-                    const float_value = try std.fmt.parseFloat(T, value, 10);
-                    self.ptr.* = float_value;
+                    self.ptr.* = try std.fmt.parseFloat(T, value, 10);
                 },
                 else => @compileError("Unsupported type"),
             }
@@ -37,10 +39,20 @@ fn ContextBase(comptime Parser: type) type {
         allocator: std.mem.Allocator,
         parser: *Parser,
 
-        pub fn bind(self: *Self, comptime T: type, ptr: *T, k: []const u8) !void {
-            const v = self.parser.getArg(k) orelse return;
+        pub fn bind(self: *Self, comptime T: type, ptr: *T, long: []const u8, short: []const u8) !void {
             var binding = Binding(T){ .ptr = ptr };
-            try binding.set(v);
+
+            const short_full = try std.mem.concat(self.allocator, u8, &[_][]const u8{ "-", short });
+            defer self.allocator.free(short_full);
+            if (self.parser.getArg(short_full)) |v| {
+                try binding.set(v);
+            }
+
+            const long_full = try std.mem.concat(self.allocator, u8, &[_][]const u8{ "--", long });
+            defer self.allocator.free(long_full);
+            if (self.parser.getArg(long_full)) |v| {
+                try binding.set(v);
+            }
         }
     };
 }
@@ -68,7 +80,7 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
                 .parser = &parser,
             };
 
-            var runner = try Runner.init(ctx);
+            var runner = try Runner.init(&ctx);
 
             return Self{
                 .parser = parser,
@@ -85,7 +97,7 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
                 .parser = &self.parser,
             };
 
-            try self.runner.run(ctx);
+            try self.runner.run(&ctx);
         }
 
         pub fn deinit(self: *Self) void {
@@ -111,12 +123,12 @@ test "simple test" {
 
         pub const Self = @This();
 
-        pub fn init(ctx: ContextT) !Self {
+        pub fn init(ctx: *ContextT) !Self {
             _ = ctx;
             return Self{};
         }
 
-        pub fn run(self: *Self, ctx: ContextT) !void {
+        pub fn run(self: *Self, ctx: *ContextT) !void {
             _ = ctx;
             self.v = 10;
             return;
@@ -137,17 +149,19 @@ test "simple test" {
 test "test key binding" {
     const Runner = struct {
         v: usize = 0,
+        a: usize = 0,
 
         pub const Self = @This();
 
-        pub fn init(ctx: ContextT) !Self {
+        pub fn init(ctx: *ContextT) !Self {
             var self = Self{};
-            try ctx.bind(usize, &self.v, "v");
+            try ctx.bind(usize, &self.v, "verbose", "v");
+            try ctx.bind(usize, &self.a, "another", "a");
 
             return self;
         }
 
-        pub fn run(self: *Self, ctx: ContextT) !void {
+        pub fn run(self: *Self, ctx: *ContextT) !void {
             _ = ctx;
             _ = self;
             return;
@@ -155,12 +169,14 @@ test "test key binding" {
 
         pub fn deinit(self: *Self) void {
             self.v = 0;
+            self.a = 0;
         }
     };
 
-    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=20");
+    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=20 --another=30");
     cmd.exec() catch unreachable;
     defer cmd.deinit();
 
     try testing.expect(cmd.runner.v == 20);
+    try testing.expect(cmd.runner.a == 30);
 }
