@@ -100,6 +100,28 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
         }
 
         pub fn exec(self: *Self) !void {
+            const currentCommand = self.parser.next();
+            const isCurrent = std.mem.eql(u8, currentCommand, self.cmd);
+
+            if (self.parser.args.items.len == 1 and self.root) {
+                try self._exec();
+                return;
+            }
+
+            if (self.parser.args.items.len > 1 and self.root) {
+                for (self.children) |child| {
+                    try child.exec();
+                }
+                return;
+            }
+
+            if (self.parser.args.items.len > 1 and !self.root and isCurrent) {
+                try self._exec();
+                return;
+            }
+        }
+
+        fn _exec(self: *Self) !void {
             var ctx = InnerContext{
                 .cmd = self.cmd,
                 .allocator = self.allocator,
@@ -119,6 +141,9 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
         pub fn deinit(self: *Self) void {
             self.parser.deinit();
             self.runner.deinit();
+            for (self.children) |child| {
+                child.deinit();
+            }
             self.allocator.free(self.children);
         }
     };
@@ -208,4 +233,38 @@ test "test key binding" {
     try testing.expect(cmd.runner.a == 30);
     try testing.expect(cmd.runner.en == Enum.B);
     try testing.expect(std.mem.eql(u8, cmd.runner.str, "mystring"));
+}
+
+test "subcommand testing" {
+    const Runner = struct {
+        v: usize = 0,
+
+        pub const Self = @This();
+
+        pub fn init(ctx: *ContextT) !Self {
+            _ = ctx;
+            return Self{};
+        }
+
+        pub fn run(self: *Self, ctx: *ContextT) !void {
+            _ = ctx;
+            self.v = 10;
+            return;
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.v = 0;
+        }
+    };
+
+    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one two");
+    defer cmd.deinit();
+    var twoCmd = try CommandT(Runner).initMock(std.testing.allocator, "two", "");
+    var threeCmd = try CommandT(Runner).initMock(std.testing.allocator, "three", "");
+    try cmd.addSubcommand(&twoCmd);
+    try cmd.addSubcommand(&threeCmd);
+    cmd.exec() catch unreachable;
+
+    try testing.expect(cmd.runner.v == 0);
+    try testing.expect(twoCmd.runner.v == 0);
 }

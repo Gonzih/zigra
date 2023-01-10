@@ -14,6 +14,8 @@ pub fn ArgParser(comptime mock: bool) type {
         pub const ArgsList = std.ArrayList([]const u8);
         pub const ArgsMap = std.StringHashMap([]const u8);
 
+        deinited: bool = false,
+        index: usize = 0,
         inner: InnerType,
         args: ArgsList,
         map: ArgsMap,
@@ -52,14 +54,23 @@ pub fn ArgParser(comptime mock: bool) type {
             };
         }
 
+        pub fn next(self: *Self) []const u8 {
+            defer self.index += 1;
+            if (self.index >= self.args.items.len) return "";
+            return self.args.items[self.index];
+        }
+
         pub fn getArg(self: *Self, k: []const u8) ?[]const u8 {
             return self.map.get(k);
         }
 
         pub fn deinit(self: *Self) void {
-            self.args.deinit();
-            self.map.deinit();
-            self.inner.deinit();
+            if (!self.deinited) {
+                self.deinited = true;
+                self.args.deinit();
+                self.map.deinit();
+                self.inner.deinit();
+            }
         }
     };
 }
