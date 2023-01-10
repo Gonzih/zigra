@@ -158,7 +158,7 @@ test "test key binding" {
         }
     };
 
-    const cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=20");
+    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=20");
     cmd.exec() catch unreachable;
     defer cmd.deinit();
 
