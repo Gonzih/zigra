@@ -66,10 +66,6 @@ test "check if elements are present" {
     var parser = try ArgParser(true).parse(allocator, "binary-path test");
     defer parser.deinit();
 
-    for (parser.args.items) |arg| {
-        std.debug.print("=> Argument: \"{s}\"\n", .{arg});
-    }
-
     var asserts = [_][]const u8{
         "binary-path",
         "test",
