@@ -20,7 +20,6 @@ pub fn ArgParser(comptime mock: bool) type {
         map: ArgsMap,
 
         pub fn parse(allocator: std.mem.Allocator, command: []const u8) !Self {
-            // std.debug.print("=> Command: \"{s}\"\n", .{command});
             var iter = switch (mock) {
                 true => try InnerType.init(allocator, command),
                 false => try InnerType.initWithAllocator(allocator),
@@ -38,10 +37,8 @@ pub fn ArgParser(comptime mock: bool) type {
                     var split = std.mem.split(u8, arg, "=");
                     const key = split.next().?;
                     const value = if (split.next()) |v| v else "";
-                    std.debug.print("=> Flag: \"{s}\" = \"{s}\"\n", .{ key, value });
                     try map.put(key, value);
                 } else {
-                    std.debug.print("=> Value: \"{s}\"\n", .{arg});
                     try list.append(arg);
                 }
             }
@@ -72,7 +69,6 @@ pub fn ArgParser(comptime mock: bool) type {
 }
 
 test "test real args" {
-    std.debug.print("\n", .{});
     const allocator = std.testing.allocator;
     var parser = try ArgParser(false).parse(allocator, "binary-path test");
     defer parser.deinit();
@@ -80,7 +76,6 @@ test "test real args" {
 }
 
 test "test mock args len" {
-    std.debug.print("\n", .{});
     const allocator = std.testing.allocator;
     var parser = try ArgParser(true).parse(allocator, "binary-path test");
     defer parser.deinit();
@@ -88,7 +83,6 @@ test "test mock args len" {
 }
 
 test "check if elements are present" {
-    std.debug.print("\n", .{});
     const allocator = std.testing.allocator;
     var parser = try ArgParser(true).parse(allocator, "binary-path test");
     defer parser.deinit();
@@ -100,13 +94,11 @@ test "check if elements are present" {
 
     for (parser.args.items) |arg, idx| {
         const assert = asserts[idx];
-        std.debug.print("=> Comparing: {s} == {s}\n", .{ arg, assert });
         try testing.expect(std.mem.eql(u8, arg, assert));
     }
 }
 
 test "check if elements are present" {
-    std.debug.print("\n", .{});
     const allocator = std.testing.allocator;
     var parser = try ArgParser(true).parse(allocator, "binary-path test --bool-arg --string-arg=string-value");
     defer parser.deinit();
@@ -118,7 +110,6 @@ test "check if elements are present" {
 
     for (asserts) |assert, idx| {
         const value = parser.args.items[idx];
-        std.debug.print("=> Comparing: {s} == {s}\n", .{ value, assert });
         try testing.expect(std.mem.eql(u8, value, assert));
     }
 
@@ -131,9 +122,7 @@ test "check if elements are present" {
     while (it.next()) |entry| {
         const key = entry.key_ptr.*;
         const value = entry.value_ptr.*;
-        std.debug.print("=> Found: {s} => {s}\n", .{ key, value });
         const map_value = parser.map.get(key) orelse unreachable;
-        std.debug.print("=> Comparing: \"{s}\" == \"{s}\"\n", .{ map_value, value });
         try testing.expect(std.mem.eql(u8, map_value, value));
     }
 }

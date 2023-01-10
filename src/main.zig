@@ -112,14 +112,6 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
             const is_current = std.mem.eql(u8, current_command, self.cmd);
             const arg_len = self.parser.args.items.len;
 
-            std.debug.print("exec: {s} current {s} is_current: {} level: {} children.len: {}\n", .{
-                self.cmd,
-                current_command,
-                is_current,
-                self.level,
-                self.children.len,
-            });
-
             if (arg_len == 1 and self.level == 0) {
                 try self._exec();
                 return;
@@ -160,7 +152,6 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
             self.runner.deinit();
 
             for (self.children) |child| {
-                std.debug.print("deinit child {s}\n", .{child.cmd});
                 child.deinit();
             }
 
