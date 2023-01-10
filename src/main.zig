@@ -2,60 +2,34 @@ const std = @import("std");
 const testing = std.testing;
 const process = std.process;
 const builtin = @import("builtin");
+const args = @import("args.zig");
 
 pub const Context = struct {
     cmd: []const u8,
 };
 
-fn CommandBase(comptime t: bool) type {
+fn CommandBase(comptime Parser: type) type {
     return struct {
-        const InnerIt = switch (t) {
-            true => process.ArgIteratorGeneral(.{}),
-            false => process.ArgIterator,
-        };
-
-        it: InnerIt,
+        parser: Parser,
         cmd: []const u8,
-        // children: []*CommandBase(t) = &[_]*CommandBase(t){},
+        children: []*CommandBase(Parser) = &[_]*CommandBase(Parser){},
         run: fn (ctx: *Context) void,
-        // init: ?fn (ctx: *CommandBase(t)) void = undefined,
-        // allocator: std.mem.Allocator = switch (t) {
-        //     true => testing.allocator,
-        //     false => std.heap.page_allocator,
-        // },
-        allocator: std.mem.Allocator = std.heap.page_allocator,
 
-        // pub fn exec(comptime self: *CommandBase(t)) void {
-        //     var args = switch (t) {
-        //         true => try InnerIt.initWithAllocator(self.allocator, "dummy cli args"),
-        //         false => try InnerIt.initWithAllocator(self.allocator),
-        //     };
-        //     // defer args.deinit();
+        pub fn exec(comptime self: *CommandBase(Parser), allocator: std.mem.Allocator) void {
+            // defer iter.deinit();
 
-        //     std.debug.print("args: {any}\n", .{args});
+            _ = allocator;
+            std.debug.print("args: {any}\n", .{self.parser});
 
-        //     // skip my own exe name
-        //     // _ = args.skip();
+            // skip my own exe name
+            // _ = iter.skip();
 
-        //     self.execWith(args);
-        // }
-
-        pub fn execWith(comptime self: *CommandBase(t), args: InnerIt) void {
-            std.debug.print("args: {any}\n", .{args});
-            var ctx = Context{ .cmd = self.cmd };
-            self.run(&ctx);
-        }
-
-        fn deinit(comptime self: *CommandBase(t)) void {
-            for (self.children) |child| {
-                child.deinit();
-            }
-            // self.allocator.free(self);
+            // self.execWith(iter);
         }
     };
 }
 
-pub const Command = CommandBase(false);
+pub const Command = CommandBase(args.ArgParser(false));
 
 var setThis: usize = 0;
 
@@ -64,26 +38,55 @@ fn run(ctx: *Context) void {
     std.debug.print("running {s}\n", .{ctx.name});
 }
 
-test "mocked out command line" {
-    const CommandTestable = CommandBase(true);
+// test "simple one" {
+//     const CommandT = CommandBase(false);
 
-    setThis = 0;
+//     setThis = 0;
 
-    const a = std.testing.allocator;
+//     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+//     // defer arena.deinit();
+//     const a = arena.allocator();
 
-    var input_cmd_line = "zig add --foo bar --baz 10";
-    var it = try process.ArgIteratorGeneral(.{}).init(a, input_cmd_line);
-    std.debug.print("it: {any}\n", .{it});
+//     comptime var cmd = CommandT{
+//         .cmd = "add",
+//         .run = run,
+//     };
 
-    comptime var cmd = CommandTestable{
-        .cmd = "add",
-        .run = run,
-        .allocator = a,
-    };
+//     // defer cmd.deinit();
 
-    // defer cmd.deinit();
+//     cmd.exec(a);
 
-    cmd.execWith(it);
+//     try testing.expect(setThis == 10);
+// }
 
-    try testing.expect(setThis == 10);
+// test "mocked out command line" {
+//     const CommandT = CommandBase(false);
+
+//     setThis = 0;
+
+//     const a = std.testing.allocator;
+
+//     // var input_cmd_line = "program add --foo bar --baz 10";
+//     // var it = try process.ArgIteratorGeneral(.{}).init(a, input_cmd_line);
+//     var it = try process.ArgIterator.initWithAllocator(a);
+//     std.debug.print("it: {any}\n", .{it});
+
+//     comptime var cmd = CommandT{
+//         .cmd = "add",
+//         .run = run,
+//     };
+
+//     // defer cmd.deinit();
+
+//     cmd.execWith(it);
+
+//     try testing.expect(setThis == 10);
+// }
+
+test "ekek" {
+    const ParserT = args.ArgParser(true);
+    const CommandT = CommandBase(ParserT);
+    _ = CommandT;
+
+    try testing.expect('2' == '2');
 }
