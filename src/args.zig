@@ -14,7 +14,6 @@ pub fn ArgParser(comptime mock: bool) type {
         pub const ArgsList = std.ArrayList([]const u8);
         pub const ArgsMap = std.StringHashMap([]const u8);
 
-        deinited: bool = false,
         index: usize = 0,
         inner: InnerType,
         args: ArgsList,
@@ -65,12 +64,9 @@ pub fn ArgParser(comptime mock: bool) type {
         }
 
         pub fn deinit(self: *Self) void {
-            if (!self.deinited) {
-                self.deinited = true;
-                self.args.deinit();
-                self.map.deinit();
-                self.inner.deinit();
-            }
+            self.args.deinit();
+            self.map.deinit();
+            self.inner.deinit();
         }
     };
 }

@@ -133,18 +133,27 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
 
         pub fn addSubcommand(self: *Self, sub: *Self) !void {
             sub.root = false;
+            sub.parser.deinit();
             sub.parser = self.parser;
             self.children = try self.allocator.realloc(self.children, self.children.len + 1);
             self.children[self.children.len - 1] = sub;
         }
 
         pub fn deinit(self: *Self) void {
-            self.parser.deinit();
+            if (self.root) {
+                self.parser.deinit();
+            }
+
             self.runner.deinit();
+
             for (self.children) |child| {
+                std.debug.print("deinit child {s}\n", .{child.cmd});
                 child.deinit();
             }
-            self.allocator.free(self.children);
+
+            if (self.children.len > 0) {
+                self.allocator.free(self.children);
+            }
         }
     };
 }
