@@ -103,6 +103,14 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
             const currentCommand = self.parser.next();
             const isCurrent = std.mem.eql(u8, currentCommand, self.cmd);
 
+            std.debug.print("exec: {s} current {s} isCurrent: {} root: {} children.len: {}\n", .{
+                self.cmd,
+                currentCommand,
+                isCurrent,
+                self.root,
+                self.children.len,
+            });
+
             if (self.parser.args.items.len == 1 and self.root) {
                 try self._exec();
                 return;
@@ -110,6 +118,7 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
 
             if (self.parser.args.items.len > 1 and self.root) {
                 for (self.children) |child| {
+                    _ = child.parser.next();
                     try child.exec();
                 }
                 return;
@@ -133,17 +142,13 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
 
         pub fn addSubcommand(self: *Self, sub: *Self) !void {
             sub.root = false;
-            sub.parser.deinit();
-            sub.parser = self.parser;
+
             self.children = try self.allocator.realloc(self.children, self.children.len + 1);
             self.children[self.children.len - 1] = sub;
         }
 
         pub fn deinit(self: *Self) void {
-            if (self.root) {
-                self.parser.deinit();
-            }
-
+            self.parser.deinit();
             self.runner.deinit();
 
             for (self.children) |child| {
@@ -266,14 +271,16 @@ test "subcommand testing" {
         }
     };
 
-    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one two");
+    const cli_args = "one two --arg=1 --beta=2";
+    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", cli_args);
     defer cmd.deinit();
-    var twoCmd = try CommandT(Runner).initMock(std.testing.allocator, "two", "");
-    var threeCmd = try CommandT(Runner).initMock(std.testing.allocator, "three", "");
+    var twoCmd = try CommandT(Runner).initMock(std.testing.allocator, "two", cli_args);
+    var threeCmd = try CommandT(Runner).initMock(std.testing.allocator, "three", cli_args);
     try cmd.addSubcommand(&twoCmd);
     try cmd.addSubcommand(&threeCmd);
     cmd.exec() catch unreachable;
 
     try testing.expect(cmd.runner.v == 0);
-    try testing.expect(twoCmd.runner.v == 0);
+    try testing.expect(twoCmd.runner.v == 10);
+    try testing.expect(threeCmd.runner.v == 0);
 }
