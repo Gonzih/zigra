@@ -21,6 +21,11 @@ pub fn Binding(comptime T: type) type {
                 .Float => {
                     self.ptr.* = try std.fmt.parseFloat(T, value, 10);
                 },
+                .Enum => {
+                    if (std.meta.stringToEnum(T, value)) |v| {
+                        self.ptr.* = v;
+                    }
+                },
                 else => @compileError("Unsupported type"),
             }
         }
@@ -143,9 +148,16 @@ test "simple test" {
 }
 
 test "test key binding" {
+    const Enum = enum {
+        A,
+        B,
+        C,
+    };
+
     const Runner = struct {
         v: usize = 0,
         a: usize = 0,
+        en: Enum = .A,
 
         pub const Self = @This();
 
@@ -153,6 +165,7 @@ test "test key binding" {
             var self = Self{};
             try ctx.bind(usize, &self.v, "verbose", "v");
             try ctx.bind(usize, &self.a, "another", "a");
+            try ctx.bind(Enum, &self.en, "enum", "e");
 
             return self;
         }
@@ -169,10 +182,11 @@ test "test key binding" {
         }
     };
 
-    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=20 --another=30");
+    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=20 --another=30 --enum=B");
     cmd.exec() catch unreachable;
     defer cmd.deinit();
 
     try testing.expect(cmd.runner.v == 20);
     try testing.expect(cmd.runner.a == 30);
+    try testing.expect(cmd.runner.en == Enum.B);
 }
