@@ -16,6 +16,7 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
         parser: Parser,
         runner: Runner,
         cmd: []const u8,
+        allocator: std.mem.Allocator,
 
         pub fn init(allocator: std.mem.Allocator, cmd: []const u8) Self {
             var ctx = Context{
@@ -27,6 +28,7 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
                 .parser = Parser.parse(allocator, ""),
                 .runner = Runner.init(ctx),
                 .cmd = cmd,
+                .allocator = allocator,
             };
         }
 
@@ -40,14 +42,15 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
                 .parser = try Parser.parse(allocator, mock_args),
                 .runner = Runner.init(ctx),
                 .cmd = cmd,
+                .allocator = allocator,
             };
         }
 
-        pub fn exec(self: *Self, allocator: std.mem.Allocator) !void {
+        pub fn exec(self: *Self) !void {
             std.debug.print("args: {any}\n", .{self.parser});
             var ctx = Context{
                 .cmd = self.cmd,
-                .allocator = allocator,
+                .allocator = self.allocator,
             };
 
             try self.runner.run(ctx);
@@ -68,8 +71,8 @@ fn CommandT(comptime Runner: type) type {
     return CommandBase(args.ArgParser(true), Runner);
 }
 
-test "test one" {
-    const RunnerTone = struct {
+test "simple test" {
+    const Runner = struct {
         v: usize = 0,
 
         pub const Self = @This();
@@ -90,9 +93,37 @@ test "test one" {
         }
     };
 
-    const CommandTone = CommandT(RunnerTone);
-    var cmd = try CommandTone.initMock(std.testing.allocator, "one", "one -v=10");
-    cmd.exec(std.testing.allocator) catch unreachable;
+    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=10");
+    cmd.exec() catch unreachable;
+    defer cmd.deinit();
+
+    try testing.expect(cmd.runner.v == 10);
+}
+
+test "test key binding" {
+    const Runner = struct {
+        v: usize = 0,
+
+        pub const Self = @This();
+
+        pub fn init(ctx: Context) Self {
+            _ = ctx;
+            return Self{};
+        }
+
+        pub fn run(self: *Self, ctx: Context) !void {
+            _ = ctx;
+            self.v = 10;
+            return;
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.v = 0;
+        }
+    };
+
+    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=10");
+    cmd.exec() catch unreachable;
     defer cmd.deinit();
 
     try testing.expect(cmd.runner.v == 10);
