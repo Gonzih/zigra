@@ -98,7 +98,7 @@ test "check if elements are present" {
     }
 }
 
-test "check if elements are present" {
+test "check if elements and keys are present" {
     const allocator = std.testing.allocator;
     var parser = try ArgParser(true).parse(allocator, "binary-path test --bool-arg --string-arg=string-value");
     defer parser.deinit();
