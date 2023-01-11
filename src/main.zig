@@ -13,7 +13,7 @@ pub fn Binding(comptime T: type) type {
         pub fn set(self: *Self, value: []const u8) !void {
             switch (@typeInfo(T)) {
                 .Bool => {
-                    self.ptr.* = value != "false";
+                    self.ptr.* = std.mem.eql(u8, value, "false");
                 },
                 .Int => {
                     self.ptr.* = try std.fmt.parseInt(T, value, 10);
@@ -484,6 +484,7 @@ test "print help" {
         a: usize = 0,
         en: Enum = .A,
         str: []const u8 = "",
+        b: bool = false,
 
         pub const Self = @This();
 
@@ -493,6 +494,7 @@ test "print help" {
             try ctx.bind(usize, &self.a, "another", "a", "Another value");
             try ctx.bind(Enum, &self.en, "enum", "e", "Enum input");
             try ctx.bind([]const u8, &self.str, "string", "s", "String input");
+            try ctx.bind(bool, &self.b, "bool", "b", "Boolean flag");
 
             return self;
         }
