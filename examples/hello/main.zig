@@ -19,7 +19,7 @@ const Runner = struct {
         var self = Self{};
         try ctx.bind(bool, &self.verbose, "verbose", "v", "Verbose output");
         try ctx.bind(usize, &self.threads, "threads", "t", "Number of threads to run");
-        try ctx.bind(Enum, &self.kind, "worker-king", "w", "Which worker to run");
+        try ctx.bind(Enum, &self.kind, "worker-kind", "w", "Which worker to run");
         try ctx.bind([]const u8, &self.id, "uuid", "u", "Unique identifier for the worker");
 
         return self;
