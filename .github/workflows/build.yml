@@ -20,7 +20,7 @@ jobs:
         run: zig build test
 
       - name: Run build
-        run: zig build test
+        run: zig build
 
       - name: Run hello example
         run: ./zig-out/bin/hello --help
