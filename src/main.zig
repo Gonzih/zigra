@@ -175,9 +175,11 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
 
             try self.runner.run(&ctx);
         }
+
         fn printHelp(self: *Self) !void {
             try self.printCommands();
             try self.printArguments();
+            std.debug.print("\n", .{});
         }
 
         fn printCommands(self: *Self) !void {
@@ -186,11 +188,16 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
                 defer self.allocator.free(help);
                 std.debug.print("\n{s}\n", .{help});
                 if (self.children.len > 0) {
-                    std.debug.print("\nCommands:\n", .{});
+                    std.debug.print("\n\tCommands:\n", .{});
                 }
             } else {
                 var help = try std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ self.cmd, self.desc });
                 defer self.allocator.free(help);
+                var i: usize = 0;
+                while (i < self.level) {
+                    std.debug.print("\t", .{});
+                    i += 1;
+                }
                 std.debug.print("\t{s}\n", .{help});
             }
 
@@ -204,12 +211,12 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
         fn printArguments(self: *Self) !void {
             if (self.level == 0) {
                 if (self.descriptions.items.len > 0) {
-                    std.debug.print("\nArguments:\n", .{});
+                    std.debug.print("\n\tArguments:\n", .{});
                 }
             }
 
             for (self.descriptions.items) |desc| {
-                std.debug.print("\t{s}\n", .{desc});
+                std.debug.print("\t\t{s}\n", .{desc});
             }
 
             for (self.children) |child| {
