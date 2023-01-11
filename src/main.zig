@@ -34,8 +34,26 @@ pub fn Binding(comptime T: type) type {
                 else => @compileError("Unsupported type"),
             }
         }
+
+        pub fn typeString(self: *Self) []const u8 {
+            _ = self;
+            switch (@typeInfo(T)) {
+                .Bool => return "true or false",
+                .Int => return "integer",
+                .Float => return "float",
+                .Enum => return "enum",
+                .Pointer => |info| {
+                    if (info.child == u8) {
+                        return "string";
+                    } else @compileError("Unsupported slice type");
+                },
+                else => @compileError("Unsupported type"),
+            }
+        }
     };
 }
+
+const ArgDescriptions = std.ArrayList([]const u8);
 
 fn ContextBase(comptime Parser: type) type {
     return struct {
@@ -44,8 +62,9 @@ fn ContextBase(comptime Parser: type) type {
         cmd: []const u8,
         allocator: std.mem.Allocator,
         parser: *Parser,
+        descriptions: *ArgDescriptions,
 
-        pub fn bind(self: *Self, comptime T: type, ptr: *T, long: []const u8, short: []const u8) !void {
+        pub fn bind(self: *Self, comptime T: type, ptr: *T, long: []const u8, short: []const u8, desc: []const u8) !void {
             var binding = Binding(T){ .ptr = ptr };
 
             const short_full = try std.mem.concat(self.allocator, u8, &[_][]const u8{ "-", short });
@@ -59,6 +78,9 @@ fn ContextBase(comptime Parser: type) type {
             if (self.parser.getArg(long_full)) |v| {
                 try binding.set(v);
             }
+
+            const desc_full = try std.fmt.allocPrint(self.allocator, "--{s}, -{s} ({s}): {s}", .{ long, short, binding.typeString(), desc });
+            try self.descriptions.append(desc_full);
         }
     };
 }
@@ -71,21 +93,25 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
         parser: Parser,
         runner: Runner,
         cmd: []const u8,
+        desc: []const u8,
         allocator: std.mem.Allocator,
         children: []*Self,
         level: usize = 0,
+        descriptions: ArgDescriptions,
 
-        pub fn init(allocator: std.mem.Allocator, cmd: []const u8) !Self {
-            return initMock(allocator, cmd, "");
+        pub fn init(allocator: std.mem.Allocator, cmd: []const u8, desc: []const u8) !Self {
+            return initMock(allocator, cmd, desc, "");
         }
 
-        fn initMock(allocator: std.mem.Allocator, cmd: []const u8, mock_args: []const u8) !Self {
+        fn initMock(allocator: std.mem.Allocator, cmd: []const u8, desc: []const u8, mock_args: []const u8) !Self {
+            var descriptions = ArgDescriptions.init(allocator);
             var parser = try Parser.parse(allocator, mock_args);
 
             var ctx = InnerContext{
                 .cmd = cmd,
                 .allocator = allocator,
                 .parser = &parser,
+                .descriptions = &descriptions,
             };
 
             var runner = try Runner.init(&ctx);
@@ -94,8 +120,10 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
                 .parser = parser,
                 .runner = runner,
                 .cmd = cmd,
+                .desc = desc,
                 .allocator = allocator,
                 .children = try allocator.alloc(*Self, 0),
+                .descriptions = descriptions,
             };
         }
 
@@ -108,6 +136,13 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
         }
 
         pub fn exec(self: *Self) !void {
+            var help = self.parser.getArg("--help");
+            if (help == null) help = self.parser.getArg("-h");
+            if (help) |_| {
+                try self.printHelp();
+                return;
+            }
+
             const current_command = self.next();
             const is_current = std.mem.eql(u8, current_command, self.cmd);
             const arg_len = self.parser.args.items.len;
@@ -135,9 +170,53 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
                 .cmd = self.cmd,
                 .allocator = self.allocator,
                 .parser = &self.parser,
+                .descriptions = &self.descriptions,
             };
 
             try self.runner.run(&ctx);
+        }
+        fn printHelp(self: *Self) !void {
+            try self.printCommands();
+            try self.printArguments();
+        }
+
+        fn printCommands(self: *Self) !void {
+            if (self.level == 0) {
+                var help = try std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ self.cmd, self.desc });
+                defer self.allocator.free(help);
+                std.debug.print("\n{s}\n", .{help});
+                if (self.children.len > 0) {
+                    std.debug.print("\nCommands:\n", .{});
+                }
+            } else {
+                var help = try std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ self.cmd, self.desc });
+                defer self.allocator.free(help);
+                std.debug.print("\t{s}\n", .{help});
+            }
+
+            for (self.children) |child| {
+                try child.printCommands();
+            }
+
+            return;
+        }
+
+        fn printArguments(self: *Self) !void {
+            if (self.level == 0) {
+                if (self.descriptions.items.len > 0) {
+                    std.debug.print("\nArguments:\n", .{});
+                }
+            }
+
+            for (self.descriptions.items) |desc| {
+                std.debug.print("\t{s}\n", .{desc});
+            }
+
+            for (self.children) |child| {
+                try child.printArguments();
+            }
+
+            return;
         }
 
         pub fn addSubcommand(self: *Self, sub: *Self) !void {
@@ -158,6 +237,12 @@ fn CommandBase(comptime Parser: type, comptime Runner: type) type {
             if (self.children.len > 0) {
                 self.allocator.free(self.children);
             }
+
+            for (self.descriptions.items) |desc| {
+                self.allocator.free(desc);
+            }
+
+            self.descriptions.deinit();
         }
     };
 }
@@ -194,7 +279,7 @@ test "simple test" {
         }
     };
 
-    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=10");
+    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "My App", "one -v=10");
     cmd.exec() catch unreachable;
     defer cmd.deinit();
 
@@ -218,10 +303,10 @@ test "test key binding" {
 
         pub fn init(ctx: *ContextT) !Self {
             var self = Self{};
-            try ctx.bind(usize, &self.v, "verbose", "v");
-            try ctx.bind(usize, &self.a, "another", "a");
-            try ctx.bind(Enum, &self.en, "enum", "e");
-            try ctx.bind([]const u8, &self.str, "string", "s");
+            try ctx.bind(usize, &self.v, "verbose", "v", "Verbose output");
+            try ctx.bind(usize, &self.a, "another", "a", "Another value");
+            try ctx.bind(Enum, &self.en, "enum", "e", "Enum input");
+            try ctx.bind([]const u8, &self.str, "string", "s", "String input");
 
             return self;
         }
@@ -238,7 +323,7 @@ test "test key binding" {
         }
     };
 
-    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "one -v=20 --another=30 --enum=B --string=mystring");
+    var cmd = try CommandT(Runner).initMock(std.testing.allocator, "one", "My App", "one -v=20 --another=30 --enum=B --string=mystring");
     cmd.exec() catch unreachable;
     defer cmd.deinit();
 
@@ -273,12 +358,12 @@ test "subcommand testing" {
     const alloc = std.testing.allocator;
     const cli_args = "one two --arg=1 --beta=2";
 
-    var cmd = try CommandT(Runner).initMock(alloc, "one", cli_args);
+    var cmd = try CommandT(Runner).initMock(alloc, "one", "My App", cli_args);
     defer cmd.deinit();
 
-    var twoCmd = try CommandT(Runner).initMock(alloc, "two", cli_args);
-    var threeCmd = try CommandT(Runner).initMock(alloc, "three", cli_args);
-    var fourCmd = try CommandT(Runner).initMock(alloc, "four", cli_args);
+    var twoCmd = try CommandT(Runner).initMock(alloc, "two", "My App", cli_args);
+    var threeCmd = try CommandT(Runner).initMock(alloc, "three", "My App", cli_args);
+    var fourCmd = try CommandT(Runner).initMock(alloc, "four", "My App", cli_args);
 
     try cmd.addSubcommand(&twoCmd);
     try cmd.addSubcommand(&threeCmd);
@@ -317,12 +402,12 @@ test "subcommand testing 3 levels nesting" {
     const alloc = std.testing.allocator;
     const cli_args = "one two four --arg=1 --beta=2";
 
-    var cmd = try CommandT(Runner).initMock(alloc, "one", cli_args);
+    var cmd = try CommandT(Runner).initMock(alloc, "one", "My App", cli_args);
     defer cmd.deinit();
 
-    var twoCmd = try CommandT(Runner).initMock(alloc, "two", cli_args);
-    var threeCmd = try CommandT(Runner).initMock(alloc, "three", cli_args);
-    var fourCmd = try CommandT(Runner).initMock(alloc, "four", cli_args);
+    var twoCmd = try CommandT(Runner).initMock(alloc, "two", "second subcommand", cli_args);
+    var threeCmd = try CommandT(Runner).initMock(alloc, "three", "third subcommand", cli_args);
+    var fourCmd = try CommandT(Runner).initMock(alloc, "four", "first subcommand", cli_args);
 
     try cmd.addSubcommand(&twoCmd);
     try cmd.addSubcommand(&threeCmd);
@@ -361,12 +446,70 @@ test "subcommand testing 3 levels no match" {
     const alloc = std.testing.allocator;
     const cli_args = "one three four --arg=1 --beta=2";
 
-    var cmd = try CommandT(Runner).initMock(alloc, "one", cli_args);
+    var cmd = try CommandT(Runner).initMock(alloc, "one", "My App", cli_args);
     defer cmd.deinit();
 
-    var twoCmd = try CommandT(Runner).initMock(alloc, "two", cli_args);
-    var threeCmd = try CommandT(Runner).initMock(alloc, "three", cli_args);
-    var fourCmd = try CommandT(Runner).initMock(alloc, "four", cli_args);
+    var twoCmd = try CommandT(Runner).initMock(alloc, "two", "", cli_args);
+    var threeCmd = try CommandT(Runner).initMock(alloc, "three", "", cli_args);
+    var fourCmd = try CommandT(Runner).initMock(alloc, "four", "", cli_args);
+
+    try cmd.addSubcommand(&twoCmd);
+    try cmd.addSubcommand(&threeCmd);
+    try twoCmd.addSubcommand(&fourCmd);
+
+    cmd.exec() catch unreachable;
+
+    try testing.expect(cmd.runner.v == 0);
+    try testing.expect(twoCmd.runner.v == 0);
+    try testing.expect(threeCmd.runner.v == 0);
+    try testing.expect(fourCmd.runner.v == 0);
+}
+
+test "print help" {
+    const Enum = enum {
+        A,
+        B,
+        C,
+    };
+
+    const Runner = struct {
+        v: usize = 0,
+        a: usize = 0,
+        en: Enum = .A,
+        str: []const u8 = "",
+
+        pub const Self = @This();
+
+        pub fn init(ctx: *ContextT) !Self {
+            var self = Self{};
+            try ctx.bind(usize, &self.v, "verbose", "v", "Verbose output");
+            try ctx.bind(usize, &self.a, "another", "a", "Another value");
+            try ctx.bind(Enum, &self.en, "enum", "e", "Enum input");
+            try ctx.bind([]const u8, &self.str, "string", "s", "String input");
+
+            return self;
+        }
+
+        pub fn run(self: *Self, ctx: *ContextT) !void {
+            _ = ctx;
+            self.v = 0;
+            return;
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.v = 0;
+        }
+    };
+
+    const alloc = std.testing.allocator;
+    const cli_args = "one three four --help";
+
+    var cmd = try CommandT(Runner).initMock(alloc, "app", "My App", cli_args);
+    defer cmd.deinit();
+
+    var twoCmd = try CommandT(Runner).initMock(alloc, "two", "Second subcommand", cli_args);
+    var threeCmd = try CommandT(Runner).initMock(alloc, "three", "Third subcommand", cli_args);
+    var fourCmd = try CommandT(Runner).initMock(alloc, "four", "Fourth subcommand", cli_args);
 
     try cmd.addSubcommand(&twoCmd);
     try cmd.addSubcommand(&threeCmd);
