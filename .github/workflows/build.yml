@@ -16,7 +16,10 @@ jobs:
       - name: Get zig
         run: sudo snap install zig --classic --beta
 
-      - name: Run build and test
+      - name: Run test
+        run: zig build test
+
+      - name: Run build
         run: zig build test
 
       - name: Run hello example
