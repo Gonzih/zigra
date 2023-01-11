@@ -6,6 +6,11 @@ const examples = [_]Program{
         .path = "examples/hello/main.zig",
         .desc = "Hello world",
     },
+    .{
+        .name = "nested",
+        .path = "examples/nested/main.zig",
+        .desc = "Hello world",
+    },
 };
 
 pub fn buildExamples(b: *std.build.Builder, mode: std.builtin.Mode) void {
