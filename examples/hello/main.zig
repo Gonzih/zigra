@@ -7,7 +7,7 @@ const Enum = enum {
     Load,
 };
 
-const Runner = struct {
+const Handler = struct {
     verbose: bool = false,
     threads: usize = 0,
     kind: Enum = .Extract,
@@ -15,14 +15,11 @@ const Runner = struct {
 
     pub const Self = @This();
 
-    pub fn init(ctx: *zigra.Context) !Self {
-        var self = Self{};
+    pub fn init(self: *Self, ctx: *zigra.Context) !void {
         try ctx.bind(bool, &self.verbose, "verbose", "v", "Verbose output");
         try ctx.bind(usize, &self.threads, "threads", "t", "Number of threads to run");
         try ctx.bind(Enum, &self.kind, "worker-kind", "w", "Which worker to run");
         try ctx.bind([]const u8, &self.id, "uuid", "u", "Unique identifier for the worker");
-
-        return self;
     }
 
     pub fn run(self: *Self, _: *zigra.Context) !void {
@@ -39,7 +36,10 @@ const Runner = struct {
 
 pub fn main() !void {
     const alloc = std.heap.page_allocator;
-    var cmd = try zigra.Command(Runner).init(alloc, "hello", "My Hello World App");
+    var handler = Handler{};
+    var runner = zigra.Runner.make(&handler);
+    var cmd = try zigra.Command.init(alloc, &runner, "hello", "My Hello World App");
     defer cmd.deinit();
+
     try cmd.exec();
 }

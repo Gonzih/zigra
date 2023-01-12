@@ -17,7 +17,7 @@ pub const Runner = struct {
     vtable: *const VTable,
     ptr: *anyopaque,
 
-    fn make(pointer: anytype) Self {
+    pub fn make(pointer: anytype) Self {
         const Ptr = @TypeOf(pointer);
         const ptr_info = @typeInfo(Ptr);
         const alignment = @typeInfo(Ptr).Pointer.alignment;
