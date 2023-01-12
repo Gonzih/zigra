@@ -72,3 +72,27 @@ pub fn main() !void {
     try root.exec();
 }
 ```
+
+```
+./app --help
+
+app: My CLI App
+
+        Commands:
+                one: Second subcommand
+
+        Arguments:
+                --verbose, -v (true or false): Verbose output
+                --threads, -t (integer): Number of threads to run
+                --worker-kind, -w (enum): Which worker to run
+                --uuid, -u (string): Unique identifier for the worker
+
+./app one --verbose=true --threads=20 --worker-kind=Extract --uuid=secret-id
+
+  cmd: one
+  verbose: false
+  threads: 20
+  kind: main.Enum.Extract
+  id: secret-id
+
+```
