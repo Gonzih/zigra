@@ -72,7 +72,7 @@ pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
     var root = try zigra.Command.init(allocator, &r1, "app", "My CLI App");
-    var one = try zigra.Command.init(allocator, &r2, "one", "Second subcommand");
+    var one = try zigra.Command.init(allocator, &r2, "one", "First subcommand");
     try root.addSubcommand(&one);
 
     defer root.deinit();
@@ -86,7 +86,7 @@ pub fn main() !void {
 app: My CLI App
 
         Commands:
-                one: Second subcommand
+                one: First subcommand
 
         Arguments:
                 --verbose, -v (true or false): Verbose output
