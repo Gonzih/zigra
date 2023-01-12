@@ -1,5 +1,7 @@
 # Zigra
 
+![Zigra](zigra.jpg)
+
 Command line toolkit for Zig.
 Inspired by [cobra](https://github.com/spf13/cobra).
 
