@@ -4,7 +4,7 @@ Command line toolkit for Zig.
 Inspired by [cobra](https://github.com/spf13/cobra).
 
 * Separate each subcommand into its own package/file.
-* Command specific allocator and execution context.
+* Command specific allocator accessible via Context (`ctx.allocator`).
 * Modular and composable API.
 
 # Example
