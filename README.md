@@ -1,3 +1,10 @@
+# Zigra
+
+Command line toolkit for Zig. Inspired by [cobra](https://github.com/spf13/cobra).
+
+# Example
+
+```zig
 const std = @import("std");
 const zigra = @import("zigra");
 
@@ -48,19 +55,20 @@ const SubHandler = struct {
     pub fn deinit(_: *Self) void {}
 };
 
+var h1 = Handler{};
+var r1 = zigra.Runner.make(&h1);
+
+var h2 = SubHandler{};
+var r2 = zigra.Runner.make(&h2);
+
 pub fn main() !void {
-    const alloc = std.heap.page_allocator;
+    const allocator = std.heap.page_allocator;
 
-    var h1 = Handler{};
-    var r1 = zigra.Runner.make(&h1);
-    var root = try zigra.Command.init(alloc, &r1, "app", "First subcommand");
-    defer root.deinit();
-
-    var h2 = SubHandler{};
-    var r2 = zigra.Runner.make(&h2);
-    var one = try zigra.Command.init(alloc, &r2, "one", "Second subcommand");
-
+    var root = try zigra.Command.init(allocator, &r1, "app", "My CLI App");
+    var one = try zigra.Command.init(allocator, &r2, "one", "Second subcommand");
     try root.addSubcommand(&one);
 
+    defer root.deinit();
     try root.exec();
 }
+```

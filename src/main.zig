@@ -275,9 +275,7 @@ pub const Command = struct {
 
     fn printArguments(self: *Self) !void {
         if (self.level == 0) {
-            if (self.descriptions.items.len > 0) {
-                std.debug.print("\n\tArguments:\n", .{});
-            }
+            std.debug.print("\n\tArguments:\n", .{});
         }
 
         for (self.descriptions.items) |desc| {
